@@ -14,32 +14,43 @@ class Cell(Enum):
     CROSS = 2
 
 
+# предложение: мне кажется, хорошо в питоне использовать аннотации переменных
+def calculate_cell_type(field, cell_type: Cell) -> int:
+    final_amount = 0
+    for i in range(len(field)):
+        final_amount += field[i].count(cell_type)
+    return final_amount
+
+
+def is_field_correct(field, size):
+    if field is not None:
+        if size is None:
+            size = len(field)
+        assert len(field) == size
+        for i in range(len(field)):
+            assert len(field[i]) == size
+        crosses_count = calculate_cell_type(field, Cell.CROSS)
+        noughts_count = calculate_cell_type(field, Cell.NOUGHT)
+        assert crosses_count - noughts_count in [0, 1]
+        return True
+    assert size >= MIN_GAME_SIZE
+    assert size <= MAX_GAME_SIZE
+    return True
+
+
+# предложение: можно классы вынести в отдельный файлик для читабельности, а потом их импортить
 class Game:
     def __init__(self, size=None, is_cross_turn=True, field=None):
-        if field is not None:
-            if size is None:
-                size = len(field)
-            assert len(field) == size
-            for i in range(len(field)):
-                assert len(field[i]) == size
-            crosses = 0
-            noughts = 0
-            for i in range(size):
-                for j in range(size):
-                    if field[i][j] is Cell.CROSS:
-                        crosses += 1
-                    if field[i][j] is Cell.NOUGHT:
-                        noughts += 1
-            assert crosses - noughts in [0, 1]
+        if is_field_correct(field, size):
             self.size = size
             self.field = field
-            self.is_cross_turn = crosses - noughts == 0
-            return
-        assert size >= MIN_GAME_SIZE
-        assert size <= MAX_GAME_SIZE
-        self.size = size
-        self.field = [[Cell.EMPTY for _ in range(size)] for _ in range(size)]
-        self.is_cross_turn = is_cross_turn
+            crosses_count = calculate_cell_type(field, Cell.CROSS)
+            noughts_count = calculate_cell_type(field, Cell.NOUGHT)
+            self.is_cross_turn = crosses_count - noughts_count == 0
+        else:
+            self.size = size
+            self.field = [[Cell.EMPTY for _ in range(size)] for _ in range(size)]
+            self.is_cross_turn = is_cross_turn
 
     def __hash__(self):
         flat_list = list(map(lambda x: str(x.value), flatten(self.field)))
@@ -69,7 +80,7 @@ class Game:
                 if self.field[y][x] is Cell.EMPTY:
                     yield self.turn(x, y)
 
-    def ended(self):
+    def is_over(self):
         if self.winner() is not None:
             return True
         any_empty = False
@@ -95,10 +106,10 @@ class Game:
                 return cell_type
 
     def __repr__(self):
-        def s(length, ch=" "):
-            return ch * length
+        def duplicate_char(length, char=" "):  # очень хочется другое имя переменной
+            return char * length
 
-        def val_to_sign(val):
+        def val_to_sign(val):  # тут тоже
             if val == 0:
                 return "-"
             elif val == 1:
@@ -109,28 +120,29 @@ class Game:
         lines = []
         cell_width = 5
         cell_height = 3
-        header = s(cell_width // 2 + 1) + s(cell_width).join(list(map(str, range(1, self.size + 1)))) + s(
+        header = duplicate_char(cell_width // 2 + 1) + duplicate_char(cell_width).join(
+            list(map(str, range(1, self.size + 1)))) + duplicate_char(
             cell_width // 2)
         lines.append(header)
         for i in range(self.size):
             for j in range(cell_height):
                 if j == cell_height // 2:
                     prefix = str(i + 1)
-                    space_ch = " "
+                    space_char = " "
                     content = list(map(lambda x: val_to_sign(x.value), self.field[i]))
                 elif j == cell_height - 1:
                     prefix = " "
                     if i == self.size - 1 and j == cell_height - 1:
-                        space_ch = " "
+                        space_char = " "
                         content = [" "] * self.size
                     else:
-                        space_ch = "_"
+                        space_char = "_"
                         content = ["_"] * self.size
                 else:
                     prefix = " "
-                    space_ch = " "
+                    space_char = " "
                     content = [" "] * self.size
-                spacer = s(cell_width // 2, ch=space_ch)
+                spacer = duplicate_char(cell_width // 2, char=space_char)
                 lines.append(prefix + spacer + (spacer + "|" + spacer).join(content) + spacer)
         return "\n".join(lines)
 
@@ -195,13 +207,13 @@ class Minimax:
         return self.__best_turn[game]
 
     def debug(self):
-        for key, val in self.__best_turn.items():
+        for key, value in self.__best_turn.items():
             try:
                 print(self.get_cache(key, True))
             except:
                 raise Exception
             print(key)
-            print(val)
+            print(value)
             print("\n" * 3)
 
 
@@ -217,31 +229,37 @@ def incorrect_input(message):
 
 
 if __name__ == '__main__':
-    inp_size = 0
-    while (not (inp_size := input("Enter game size: ")).isdigit()) or (
-            not MIN_GAME_SIZE <= int(inp_size) <= MAX_GAME_SIZE):
+    input_size = 0
+    # предложение: выделить этот условие while в отдельную функцию типа is_input_fieldsize_correct но вообще,
+    # наверное, даже весь этот кусок кода хочется закинуть в одну функцию: start_game/request_initial_input + тяжело
+    # читать постоянные приведения к int, мб закинуть полученный input в отдельную переменную и один раз её привести
+    # к инту?
+    while (not (input_size := input("Enter game size: ")).isdigit()) or (
+            not MIN_GAME_SIZE <= int(input_size) <= MAX_GAME_SIZE):
         incorrect_input(f"please enter the number in range [{MIN_GAME_SIZE}-{MAX_GAME_SIZE}]")
-    inp_parity = 0
+    inp_parity = 0  # ???, мне кажется, стоит придумать другое имя, input_first_player (?)
+    # предложение: выделить этот условие while в отдельную функцию типа is_input_whoisturn_correct, хз
     while (not (inp_parity := input("First move (0 - you, 1 - robot): ")).isdigit()) or (not int(inp_parity) in [0, 1]):
         incorrect_input("please enter the number 0 or 1")
-    game = Game(size=int(inp_size))
-    minimax = Minimax(size=int(inp_size), is_bot_turn_first=bool(int(inp_parity)))
+    game = Game(size=int(input_size))
+    minimax = Minimax(size=int(input_size), is_bot_turn_first=bool(int(inp_parity)))
 
     if bool(int(inp_parity)):
         game = minimax.best_turn(game)
 
-    while not game.ended():
+    while not game.is_over():
         print(game)
         move_regexp = rf"^[1-{game.size}]\s[1-{game.size}]$"
-        inp_turn = ""
+        input_turn = ""
         coords = [0, 0]
-        while (not (inp_turn := input("Select cell (two numbers x and y): "))) or (
-                not re.match(move_regexp, inp_turn.strip())) or (
-                not (coords := list(map(lambda x: int(x) - 1, inp_turn.strip().split())))) or (
+        # всё ещё хочется всё условие while закинуть в отдельную функцию
+        while (not (input_turn := input("Select cell (two numbers x and y): "))) or (
+                not re.match(move_regexp, input_turn.strip())) or (
+                not (coords := list(map(lambda x: int(x) - 1, input_turn.strip().split())))) or (
                 not game.is_empty_cell(coords[0], coords[1])):
             incorrect_input(f"please enter the numbers x and y in range [1-{game.size}], cell should be empty")
         game = game.turn(coords[0], coords[1])
-        if not game.ended():
+        if not game.is_over():
             game = minimax.best_turn(game)
 
     print(game)
